@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { action, canvas, ID, modelList, project, quote, receipt, task, text, type Action, type StorySkill, storySchemas } from "../shared/contracts";
+import { action, canvas, canvasSummary, ID, modelList, project, quote, receipt, task, text, type Action, type StorySkill, storySchemas, mediaKind } from "../shared/contracts";
 import type { Identity } from "./auth";
 import type { Config } from "./config";
 import { Failure } from "./errors";
@@ -52,14 +52,30 @@ export class Bridge {
   }
 
   projects(actor: Identity) { return this.json(actor, "/projects", z.array(project).max(100)); }
-  project(actor: Identity, id: string) { return this.json(actor, "/projects/" + ID.parse(id), project); }
-  canvas(actor: Identity, projectId: string, id: string) {
-    return this.json(actor, "/projects/" + ID.parse(projectId) + "/canvases/" + ID.parse(id), canvas);
+  async project(actor: Identity, id: string) {
+    const data = await this.json(actor, "/projects/" + ID.parse(id), project);
+    if (data.id !== id) throw new Failure(502, "partner_response_invalid");
+    return data;
   }
-  task(actor: Identity, projectId: string, id: string) {
-    return this.json(actor, "/projects/" + ID.parse(projectId) + "/tasks/" + ID.parse(id), task);
+  async canvases(actor: Identity, projectId: string) {
+    const data = await this.json(actor, "/projects/" + ID.parse(projectId) + "/canvases", z.array(canvasSummary).max(100));
+    if (data.some((item) => item.projectId !== projectId)) throw new Failure(502, "partner_response_invalid");
+    return data;
+  }
+  async canvas(actor: Identity, projectId: string, id: string) {
+    const data = await this.json(actor, "/projects/" + ID.parse(projectId) + "/canvases/" + ID.parse(id), canvas);
+    if (data.id !== id || data.projectId !== projectId) throw new Failure(502, "partner_response_invalid");
+    return data;
+  }
+  async task(actor: Identity, projectId: string, id: string) {
+    const data = await this.json(actor, "/projects/" + ID.parse(projectId) + "/tasks/" + ID.parse(id), task);
+    if (data.id !== id || data.projectId !== projectId) throw new Failure(502, "partner_response_invalid");
+    return data;
   }
   models(actor: Identity) { return this.json(actor, "/text/models", modelList); }
+  mediaModels(actor: Identity, kind: z.infer<typeof mediaKind>) {
+    return this.json(actor, "/media/models/" + kind, modelList);
+  }
   preview(actor: Identity, input: Action) {
     return this.json(actor, "/actions/preview", quote, { action: input });
   }

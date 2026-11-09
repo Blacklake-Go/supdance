@@ -1,6 +1,6 @@
 {
   "name": "supdance-openai-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,8 @@
     "start": "bun server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "package:plugin": "bun scripts/package.ts"
+    "package:plugin": "bun scripts/package.ts",
+    "preflight": "bun scripts/preflight.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "2.0.4",

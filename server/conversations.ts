@@ -4,13 +4,14 @@ import { audit } from "./database";
 import type { Identity } from "./auth";
 import { requireScope } from "./auth";
 import { asFailure, Failure } from "./errors";
-import type { Draft, TurnInput } from "../shared/contracts";
+import { storySchemas, type Draft, type TurnInput } from "../shared/contracts";
 
 type Conversation = { id: string; title: string; project_id: string | null; draft: string | null; updated: number };
 type Turn = { id: string; parent: string | null; input: string; output: string; artifact: string | null;
   status: string; error: string | null; created: number };
 function present(row: Turn) {
-  return { ...row, input: JSON.parse(row.input) as TurnInput, artifact: row.artifact ? JSON.parse(row.artifact) : null };
+  const { editedFrom, ...input } = JSON.parse(row.input) as TurnInput & { editedFrom?: string };
+  return { ...row, input, editedFrom, artifact: row.artifact ? JSON.parse(row.artifact) : null };
 }
 const line = (data: unknown) => JSON.stringify(data) + "\n";
 
@@ -73,6 +74,28 @@ export class Conversations {
     }
     this.db.run("UPDATE conversations SET project_id=? WHERE id=? AND owner=?", [projectId, id, actor.owner]);
     return this.detail(actor, id);
+  }
+
+  revise(actor: Identity, id: string, originalId: string, value: unknown) {
+    requireScope(actor, "story:generate");
+    this.owned(actor, id);
+    return this.db.transaction(() => {
+      if (this.running.has(id)) throw new Failure(409, "generation_running");
+      const original = this.db.query<Turn, [string, string]>("SELECT * FROM turns WHERE id=? AND conversation=? AND status='done'").get(originalId, id);
+      if (!original) throw new Failure(404, "not_found");
+      const { input, artifact } = present(original);
+      if (input.skill === "chat" || !artifact) throw new Failure(409, "artifact_required");
+      const count = this.db.query<{ total: number }, [string]>("SELECT count(*) AS total FROM turns WHERE conversation=?").get(id);
+      if ((count?.total ?? 0) >= 200) throw new Failure(409, "conversation_limit");
+      const edited = storySchemas[input.skill].parse(value);
+      const output = JSON.stringify(edited);
+      const revisedId = crypto.randomUUID();
+      this.db.run("INSERT INTO turns VALUES(?,?,?,?,?,?,'done',NULL,?)",
+        [revisedId, id, original.parent, JSON.stringify({ ...input, editedFrom: original.id }), output, output, Date.now()]);
+      this.db.run("UPDATE conversations SET updated=? WHERE id=?", [Date.now(), id]);
+      audit(this.db, actor.owner, "story.revise", "done", revisedId);
+      return this.detail(actor, id);
+    })();
   }
 
   stream(actor: Identity, id: string, input: TurnInput) {

@@ -9,7 +9,7 @@ export const sampleShot = {
   sound: "Rail squeal", lighting: "Blue hour", imagePrompt: "Courier at station", videoPrompt: "Close up on the label",
 };
 
-export async function fixture(media = false, built = false) {
+export async function fixture(media = false, built = false, webBase = "") {
   const state = { revision: "r1", commitCount: 0, revoked: false, failAfterCommit: false };
   const receipts = new Map<string, unknown>();
   const quotes = new Map<string, { subject: string; body: unknown; credits: number }>();
@@ -22,7 +22,7 @@ export async function fixture(media = false, built = false) {
       if (path === "/authorize") {
         challenge = url.searchParams.get("code_challenge") ?? "";
         const redirect = new URL(url.searchParams.get("redirect_uri")!);
-        if (redirect.origin !== origin || url.searchParams.get("resource") !== origin + "/mcp" || url.searchParams.get("code_challenge_method") !== "S256") return new Response(null, { status: 400 });
+        if (redirect.origin !== origin || redirect.pathname !== webBase + "/oauth/callback" || url.searchParams.get("resource") !== origin + "/mcp" || url.searchParams.get("code_challenge_method") !== "S256") return new Response(null, { status: 400 });
         redirect.search = new URLSearchParams({ state: url.searchParams.get("state")!, code: "fixture-code", iss: issuer }).toString();
         return Response.redirect(redirect.href);
       }
@@ -44,8 +44,10 @@ export async function fixture(media = false, built = false) {
       if (path === "/v1/projects") return Response.json(subject === "alice" ? [project] : []);
       if (path.startsWith("/v1/projects/train") && subject !== "alice") return new Response(null, { status: 404 });
       if (path === "/v1/projects/train") return Response.json(project);
+      if (path === "/v1/projects/train/canvases") return Response.json([{ id: "board", projectId: "train", title: "Last train storyboard" }]);
       if (path === "/v1/projects/train/canvases/board") return Response.json({ id: "board", projectId: "train", revision: state.revision, nodes: [] });
       if (path === "/v1/projects/train/tasks/task-1") return Response.json({ id: "task-1", projectId: "train", kind: "image", status: "succeeded", assetIds: ["asset-1"] });
+      if (path.startsWith("/v1/media/models/")) return Response.json([{ id: "demo-media", name: "Fixture media model" }]);
       if (path === "/v1/text/models") return Response.json([{ id: "demo-text", name: "Fixture model" }]);
       if (path === "/v1/text/stream") {
         const input = await req.json() as { skill: string; maxCredits: number; brief: string };
@@ -97,7 +99,7 @@ export async function fixture(media = false, built = false) {
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: (req) => dispatch(req) });
   origin = server.url.origin;
   const config = configuration({
-    SUPDANCE_PLUGIN_DEV: "1", SUPDANCE_PLUGIN_ORIGIN: origin, SUPDANCE_PLUGIN_DATABASE: ":memory:",
+    SUPDANCE_PLUGIN_DEV: "1", SUPDANCE_PLUGIN_ORIGIN: origin, SUPDANCE_PLUGIN_WEB_BASE: webBase, SUPDANCE_PLUGIN_DATABASE: ":memory:",
     SUPDANCE_PLUGIN_OAUTH_ISSUER: issuer, SUPDANCE_PLUGIN_OAUTH_AUTHORIZATION: issuer + "/authorize",
     SUPDANCE_PLUGIN_OAUTH_TOKEN: issuer + "/token", SUPDANCE_PLUGIN_OAUTH_INTROSPECTION: issuer + "/introspect",
     SUPDANCE_PLUGIN_INTROSPECTION_ID: "rs", SUPDANCE_PLUGIN_INTROSPECTION_SECRET: "fixture-secret",
@@ -106,11 +108,11 @@ export async function fixture(media = false, built = false) {
     SUPDANCE_PLUGIN_MEDIA_ENABLED: media ? "1" : "0",
   });
   const app = application(config, {
-    index: built ? await Bun.file("dist/index.html").text() : "<main>Supdance</main>",
+    index: await Bun.file(built ? "dist/index.html" : "web/index.html").text(),
     app: built ? await Bun.file("dist/app.js").text() : "", css: built ? await Bun.file("dist/styles.css").text() : "",
     widget: built ? await Bun.file("dist/widget.html").text() : "<main>Supdance</main>",
     icon: built ? await Bun.file("plugin/assets/icon.png").bytes() : new Uint8Array(),
   });
   dispatch = app.fetch;
-  return { origin, app, state, stop() { server.stop(true); provider.stop(true); app.db.close(); } };
+  return { origin, webBase, app, state, stop() { server.stop(true); provider.stop(true); app.db.close(); } };
 }

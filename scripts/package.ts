@@ -12,6 +12,12 @@ const publicHttps = z.url({ protocol: /^https$/ }).refine((value) => {
 });
 const submission = process.argv.includes("--submission");
 const remote = process.env.SUPDANCE_PLUGIN_PACKAGE_MCP_URL;
+const providedClient = process.env.SUPDANCE_PLUGIN_PACKAGE_OAUTH_CLIENT_ID;
+const client = providedClient
+  ? { mode: "provided", clientId: z.string().trim().min(1).max(256).parse(providedClient),
+      tokenEndpointAuthMethod: z.enum(["none", "client_secret_basic", "client_secret_post"])
+        .parse(process.env.SUPDANCE_PLUGIN_PACKAGE_OAUTH_CLIENT_AUTH || "client_secret_basic") }
+  : { mode: "dcr" };
 const manifest = await Bun.file("plugin/plugin.json").json();
 if (manifest.name !== "supdance" || manifest.version !== version) throw new Error("Manifest identity/version mismatch");
 const fields = manifest.extensions["com.openai"];
@@ -34,7 +40,7 @@ try {
     await writeFile(join(dir, "mcp.json"), JSON.stringify({
       $schema: "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
       mcpServers: { supdance: { type: "streamable-http", url: remote, extensions: {
-        "com.openai": { auth: { type: "oauth", client: { mode: "dcr" }, baseScopes: ["story:generate", "projects:read", "projects:write", "canvas:read", "canvas:write"] } },
+        "com.openai": { auth: { type: "oauth", client, baseScopes: ["story:generate", "projects:read", "projects:write", "canvas:read", "canvas:write"] } },
       } } },
     }, null, 2) + "\n");
   }

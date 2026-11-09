@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { registerAppResource, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { approval, canvas, ID, project, shots, storyInput, storySchemas, task, text,
+import { approval, canvas, canvasSummary, ID, project, shots, storyInput, storySchemas, task, text,
   type Scope, type StorySkill, mediaKind } from "../shared/contracts";
 import { type Auth, type Identity, requireScope } from "./auth";
 import type { Actions } from "./actions";
@@ -89,6 +89,9 @@ export const mcp = (deps: {
   register("commit_project", "Commit a new project using its user-approved review ID.",
     z.strictObject({ reviewId: ID }), approveResult, "projects:write", true,
     async (actor, { reviewId }) => ({ approval: await actions.execute(actor, reviewId, "project") }), true);
+  register("list_canvases", "List canvases accessible in the selected project so the user can identify a target.",
+    z.strictObject({ projectId: ID }), z.object({ canvases: z.array(canvasSummary).max(100) }), "canvas:read", false,
+    async (actor, { projectId }) => ({ canvases: await bridge.canvases(actor, projectId) }));
   register("get_canvas_context", "Read the accessible canvas revision and a bounded list of node labels.",
     z.strictObject({ projectId: ID, canvasId: ID }), z.object({ canvas }), "canvas:read", false,
     async (actor, args) => ({ canvas: await bridge.canvas(actor, args.projectId, args.canvasId) }));

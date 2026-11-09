@@ -24,7 +24,7 @@ export class Actions {
   private present(row: Row): Approval {
     return {
       id: row.id, status: actionState.parse(row.status), action: JSON.parse(row.payload),
-      quote: quote.parse(JSON.parse(row.quote)), reviewUrl: this.config.origin + "/review/" + row.id,
+      quote: quote.parse(JSON.parse(row.quote)), reviewUrl: this.config.webOrigin + this.config.webBase + "/review/" + row.id,
       receipt: row.result ? receipt.parse(JSON.parse(row.result)) : undefined, error: row.error || undefined,
     };
   }

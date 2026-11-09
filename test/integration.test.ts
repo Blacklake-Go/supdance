@@ -17,7 +17,7 @@ async function client(token?: string) {
 }
 
 async function browserLogin() {
-  const initial = await fetch(env.origin + "/oauth/login", { redirect: "manual" });
+  const initial = await fetch(env.origin + env.webBase + "/oauth/login", { redirect: "manual" });
   const flow = initial.headers.getSetCookie()[0].split(";")[0];
   const provider = await fetch(initial.headers.get("location")!, { redirect: "manual" });
   const callback = provider.headers.get("location")!;
@@ -28,7 +28,7 @@ async function browserLogin() {
 }
 
 async function web(cookie: string, path: string, method = "GET", data?: unknown, origin = env.origin) {
-  return fetch(env.origin + path, { method,
+  return fetch(env.origin + env.webBase + path, { method,
     headers: { cookie, origin, ...(data === undefined ? {} : { "content-type": "application/json" }) },
     body: data === undefined ? undefined : JSON.stringify(data),
   });
@@ -43,7 +43,7 @@ test("MCP SDK discovers typed OAuth tools and requests linking; rejects revoked,
   expect(resource).toMatchObject({ resource: env.origin + "/mcp" });
   const anon = await client();
   const { tools } = await anon.listTools();
-  expect(tools).toHaveLength(13);
+  expect(tools).toHaveLength(14);
   expect(tools.find((tool) => tool.name === "supdance_apply_canvas_changes")).toMatchObject({
     annotations: { readOnlyHint: false, idempotentHint: true }, outputSchema: { type: "object" },
     _meta: { securitySchemes: [{ type: "oauth2", scopes: ["canvas:write"] }] },
@@ -69,6 +69,8 @@ test("storyboard, ownership, durable approval, immutable payload, CSRF and concu
   const alice = await client("alice-mcp"), bob = await client("bob-mcp");
   const story = await alice.callTool({ name: "supdance_generate_storyboard", arguments: { brief: "Last train" } });
   expect(story.structuredContent).toMatchObject({ artifact: { shots: [sampleShot] } });
+  expect((await alice.callTool({ name: "supdance_list_canvases", arguments: { projectId: "train" } })).structuredContent)
+    .toMatchObject({ canvases: [{ id: "board", projectId: "train" }] });
   expect((await bob.callTool({ name: "supdance_get_project", arguments: { projectId: "train" } })).isError).toBe(true);
   const payload = { requestId: "canvas-1", projectId: "train", canvasId: "board", revision: "r1", shots: [sampleShot] };
   const preview = await alice.callTool({ name: "supdance_preview_canvas_changes", arguments: payload });
@@ -97,6 +99,7 @@ test("media holds a quote, handles a lost receipt without repeating the upstream
   const item = approval.parse((result.structuredContent as { approval: unknown }).approval);
   expect(item.quote.credits).toBe(3);
   const cookie = await browserLogin(), path = "/api/approvals/" + item.id;
+  expect(await (await web(cookie, "/api/media-models/image")).json()).toMatchObject([{ id: "demo-media" }]);
   expect((await web(cookie, path + "/decision", "POST", { approve: true })).status).toBe(200);
   env.state.failAfterCommit = true;
   expect(await (await web(cookie, path + "/execute", "POST")).json()).toMatchObject({ status: "running", error: "partner_unavailable" });
@@ -104,6 +107,7 @@ test("media holds a quote, handles a lost receipt without repeating the upstream
   expect(await (await web(cookie, path + "/execute", "POST")).json()).toMatchObject({ status: "done", receipt: { task: { id: "task-1" } } });
   expect(env.state.commitCount).toBe(1);
   expect((await alice.callTool({ name: "supdance_get_task_status", arguments: { projectId: "train", taskId: "task-1" } })).structuredContent).toMatchObject({ task: { status: "succeeded", assetIds: ["asset-1"] } });
+  expect(await (await web(cookie, "/api/projects/train/tasks/task-1")).json()).toMatchObject({ assetIds: ["asset-1"] });
   await alice.close();
 });
 
@@ -126,4 +130,39 @@ test("website OAuth session saves drafts, streams turns, resumes history, stops 
   expect(await (await web(cookie, "/api/conversations?search=train")).json()).toMatchObject([{ id: conv.id }]);
   expect((await web(cookie, "/api/logout", "POST")).status).toBe(204);
   expect((await web(cookie, path)).status).toBe(401);
+});
+
+test("preserves the generated artifact and stores an edited revision separately", async () => {
+  env = await fixture();
+  const cookie = await browserLogin();
+  const conv = await (await web(cookie, "/api/conversations", "POST", { title: "Storyboard edits", projectId: "train" })).json() as { id: string };
+  const path = "/api/conversations/" + conv.id;
+  const response = await web(cookie, path + "/turns", "POST", { text: "Create a shot", skill: "storyboard", language: "en" });
+  expect(await response.text()).toContain('"status":"done"');
+  const detail = await (await web(cookie, path)).json() as { turns: { id: string }[] };
+  const original = detail.turns[0].id;
+  const invalid = await web(cookie, path + "/revision", "POST", { turnId: original, artifact: { title: "Incomplete" } });
+  expect(invalid.status).toBe(400);
+  const revision = { title: "Last Train", shots: [{ ...sampleShot, durationSeconds: 4 }] };
+  const edited = await web(cookie, path + "/revision", "POST", { turnId: original, artifact: revision });
+  expect(edited.status).toBe(201);
+  expect(await edited.json()).toMatchObject({
+    turns: [
+      { id: original, artifact: { shots: [sampleShot] } },
+      { editedFrom: original, artifact: revision },
+    ],
+  });
+  const followup = await web(cookie, path + "/turns", "POST", { text: "Continue", skill: "chat", language: "en", parent: original });
+  expect(await followup.text()).toContain('"status":"done"');
+});
+
+test("namespaces the browser app and OAuth callback alongside a root MCP endpoint", async () => {
+  env = await fixture(false, false, "/supdance-studio");
+  expect((await fetch(env.origin + "/")).status).toBe(404);
+  expect((await fetch(env.origin + "/api/me")).status).toBe(404);
+  expect((await fetch(env.origin + "/mcp")).status).toBe(401);
+  const page = await (await fetch(env.origin + "/supdance-studio")).text();
+  expect(page).toContain('src="/supdance-studio/app.js"');
+  const cookie = await browserLogin();
+  expect((await web(cookie, "/api/me")).status).toBe(200);
 });

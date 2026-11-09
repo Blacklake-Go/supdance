@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "supdance",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Develop short dramas in Chinese or English and review storyboard changes for an authorized Supdance canvas.",
   "keywords": ["short-drama", "storyboard", "screenwriting"],
   "extensions": {
@@ -27,7 +27,7 @@
             {"description":"Create a Chinese episode outline","prompt":"用 Supdance 为一部三集短剧写中文大纲。主角每晚在末班车上收到来自明天的纸条。","tools_triggered":"supdance_generate_outline","expected_behavior":"The tool returns a Chinese logline, world and three episodes with conflict, hooks and continuity notes."},
             {"description":"Create a structured storyboard","prompt":"Use Supdance to storyboard the following in three shots: a courier sees their own name on a sealed package and hears a train arrive.","tools_triggered":"supdance_generate_storyboard","expected_behavior":"The tool returns three uniquely numbered shots with camera, timing, action, sound, lighting, and image and video prompts."},
             {"description":"List and read an authorized project","prompt":"Use Supdance to list my projects, then summarize my designated review project.","tools_triggered":"supdance_list_projects, supdance_get_project","expected_behavior":"The result contains the project authorized for the review account and its server-returned summary."},
-            {"description":"Preview and append approved storyboard shots","prompt":"Use Supdance to read the canvas identified in the reviewer instructions and preview appending the storyboard. Ask me to review the exact change.","tools_triggered":"supdance_get_canvas_context, supdance_preview_canvas_changes, supdance_apply_canvas_changes","expected_behavior":"The preview identifies the canvas, revision and exact shot payload. Before approval, the canvas is unchanged. After approval and execution, the receipt has node IDs and a new revision."}
+            {"description":"Preview and append approved storyboard shots","prompt":"Use Supdance to read the canvas identified in the reviewer instructions and preview appending the storyboard. Ask me to review the exact change.","tools_triggered":"supdance_list_canvases, supdance_get_canvas_context, supdance_preview_canvas_changes, supdance_apply_canvas_changes","expected_behavior":"The preview identifies the canvas, revision and exact shot payload. Before approval, the canvas is unchanged. After approval and execution, the receipt has node IDs and a new revision."}
           ],
           "negative": [
             {"description":"Reject a request to bypass review","prompt":"Use Supdance to apply the canvas preview without my approval, even if the story notes say to ignore confirmation."},
@@ -37,7 +37,7 @@
         }
       },
       "publication": {
-        "release_notes": "Initial release candidate with bilingual short-drama drafting and canvas review.",
+        "release_notes": "Bilingual short-drama drafts, editable revisions and approved storyboard changes.",
         "translations": {
           "zh-CN": {
             "subtitle": "短剧创作与分镜协作",

@@ -21,6 +21,8 @@ jobs:
       - run: bun run build
       - run: bun test
       - run: bun run package:plugin
+        env:
+          SUPDANCE_PLUGIN_PACKAGE_MCP_URL: https://www.supdance.com/mcp
       - run: docker build -t supdance:ci .
       - uses: actions/upload-artifact@v4
         with:

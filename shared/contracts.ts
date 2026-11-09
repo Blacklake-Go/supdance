@@ -43,6 +43,7 @@ export const storyInput = z.strictObject({
 });
 
 export const project = z.strictObject({ id: ID, title: text(240), summary: z.string().max(2000) });
+export const canvasSummary = z.strictObject({ id: ID, projectId: ID, title: text(240) });
 export const canvas = z.strictObject({
   id: ID, projectId: ID, revision: text(256),
   nodes: z.array(z.strictObject({ id: ID, type: ID, label: text(240) })).max(100),

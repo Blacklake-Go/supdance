@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { type Approval, type Draft, type TurnInput, type Action, type shot } from "../shared/contracts";
+import { type Approval, type Draft, type TurnInput, type Action, type shot, type task, type mediaKind } from "../shared/contracts";
 import { copy, type Lang, type Copy } from "./copy";
+import { Artifact, ArtifactFields } from "./artifact";
 import type { z } from "zod";
 
-type Turn = { id: string; input: TurnInput; output: string; artifact: Record<string, unknown> | null; status: string; error: string | null };
+type Turn = { id: string; input: TurnInput; output: string; artifact: Record<string, unknown> | null; status: string; error: string | null; editedFrom?: string };
 type Conversation = { id: string; title: string; project_id: string | null; draft: Draft | null; turns: Turn[] };
 type Entry = Pick<Conversation, "id" | "title" | "project_id">;
 type Project = { id: string; title: string };
 type Model = { id: string; name: string };
+type MediaKind = z.infer<typeof mediaKind>;
+type Shot = z.infer<typeof shot>;
+type Task = z.infer<typeof task>;
 type Theme = "dark" | "light" | "system";
+const siteBase = document.querySelector<HTMLMetaElement>('meta[name="supdance-base"]')?.content ?? "";
+const sitePath = (path: string) => siteBase + path;
 const blank: Draft = { text: "", skill: "chat" };
 const stored = (key: string) => localStorage.getItem("supdance." + key);
 const remember = (key: string, value: string) => localStorage.setItem("supdance." + key, value);
@@ -29,7 +35,7 @@ async function http<T>(path: string, method = "GET", data?: unknown): Promise<T>
   return response.status === 204 ? undefined as T : response.json();
 }
 async function request(path: string, method: string, data?: unknown) {
-  const response = await fetch(path, { method, credentials: "same-origin",
+  const response = await fetch(sitePath(path), { method, credentials: "same-origin",
     headers: data === undefined ? {} : { "content-type": "application/json" },
     body: data === undefined ? undefined : JSON.stringify(data) });
   if (!response.ok) {
@@ -39,29 +45,91 @@ async function request(path: string, method: string, data?: unknown) {
   return response;
 }
 
-function Mark() { return <img src="/icon.png" className="mark" alt="" width="32" height="32" />; }
+function Mark() { return <img src={sitePath("/icon.png")} className="mark" alt="" width="32" height="32" />; }
 function ErrorNotice({ error, t }: { error: string; t: Copy }) {
   return error ? <div className="error" role="alert">{t.failed} · <code>{error}</code></div> : null;
 }
 function Login({ t, reviewId }: { t: Copy; reviewId?: string }) {
   return <div className="empty">
     <Mark /><h2>{t.assistant}</h2><p>{t.signedOut}</p>
-    <a className="button solid" href={"/oauth/login" + (reviewId ? "?return=" + encodeURIComponent("/review/" + reviewId) : "")}>{t.signIn}</a>
+    <a className="button solid" href={sitePath("/oauth/login") + (reviewId ? "?return=" + encodeURIComponent("/review/" + reviewId) : "")}>{t.signIn}</a>
   </div>;
 }
-function Artifact({ data }: { data: Record<string, unknown> }) {
-  return <dl className="artifact">
-    {Object.entries(data).map(([key, value]) => <div key={key}>
-      <dt>{key.replace(/([a-z])([A-Z])/g, "$1 $2")}</dt>
-      <dd>{Array.isArray(value)
-        ? <ol>{value.map((item, i) => <li key={i}>{typeof item === "object" && item
-          ? <Artifact data={item as Record<string, unknown>} /> : String(item)}</li>)}</ol>
-        : String(value)}</dd>
-    </div>)}
-  </dl>;
+function MediaRequest({ t, projectId, shots, onError }: {
+  t: Copy; projectId: string; shots: Shot[]; onError: (error: unknown) => void;
+}) {
+  const [kind, setKind] = useState<MediaKind>("image");
+  const [models, setModels] = useState<Model[]>();
+  const [model, setModel] = useState("");
+  const [index, setIndex] = useState(0);
+  const promptFor = (type: MediaKind, shot: Shot) => type === "image" ? shot.imagePrompt
+    : type === "video" ? shot.videoPrompt : shot.sound + "\n" + shot.setting;
+  const [prompt, setPrompt] = useState(() => promptFor("image", shots[0]));
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let current = true;
+    void http<Model[]>("/api/media-models/" + kind)
+      .then((items) => { if (current) setModels(items); }).catch((error) => { if (current) { setModels([]); onError(error); } });
+    return () => { current = false; };
+  }, [kind]);
+
+  async function prepare(e: FormEvent) {
+    e.preventDefault();
+    if (!model || !prompt.trim() || busy) return;
+    setBusy(true);
+    try {
+      const payload: Action = { kind, projectId, model, prompt, shotNumber: shots[index].number };
+      const result = await http<Approval>("/api/approvals", "POST", { requestId: crypto.randomUUID(), payload });
+      location.assign(sitePath("/review/" + result.id));
+    } catch (err) { onError(err); }
+    finally { setBusy(false); }
+  }
+
+  return <form className="settings" onSubmit={prepare}>
+    <strong>{t.media}</strong>
+    <label>{t.mediaKind}<select disabled={busy} value={kind} onChange={(e) => {
+      const next = e.target.value as MediaKind;
+      setKind(next); setModels(undefined); setModel(""); setPrompt(promptFor(next, shots[index]));
+    }}>{Object.entries(t.mediaTypes).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label>
+    <label>{t.mediaShot}<select disabled={busy} value={index} onChange={(e) => {
+      const next = Number(e.target.value);
+      setIndex(next); setPrompt(promptFor(kind, shots[next]));
+    }}>{shots.map((shot, i) => <option key={shot.number} value={i}>{shot.number} · {shot.scene}</option>)}</select></label>
+    <label>{t.mediaModel}<select disabled={busy || !models?.length} required value={model} onChange={(e) => setModel(e.target.value)}>
+      <option value="">{models === undefined ? t.connecting : models.length ? t.mediaChoose : t.mediaEmpty}</option>
+      {models?.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+    </select></label>
+    <label>{t.mediaPrompt}<textarea disabled={busy} value={prompt} rows={3} maxLength={12000} onChange={(e) => setPrompt(e.target.value)} /></label>
+    <button className="solid" disabled={busy || !model || !prompt.trim()}>{t.mediaQuote}</button>
+  </form>;
 }
 
-function Review({ id, t }: { id: string; t: Copy }) {
+function TaskStatus({ initial, lang, t }: { initial: Task; lang: Lang; t: Copy }) {
+  const [task, setTask] = useState(initial);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function refresh() {
+    setBusy(true); setError("");
+    try {
+      setTask(await http<Task>(`/api/projects/${encodeURIComponent(initial.projectId)}/tasks/${encodeURIComponent(initial.id)}`));
+    } catch (err) { setError((err as Error).message); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => {
+    if (task.status !== "queued" && task.status !== "running") return;
+    const timer = setTimeout(() => void refresh(), 5000);
+    return () => clearTimeout(timer);
+  }, [task]);
+  return <section className="settings">
+    <h2>{t.task} · {t.taskStatus[task.status]}</h2>
+    {task.progress !== undefined && <progress aria-label={t.taskProgress} max={100} value={task.progress} />}
+    <Artifact data={{ id: task.id, assetIds: task.assetIds }} lang={lang} />
+    <ErrorNotice error={error || task.errorCode || ""} t={t} />
+    <button disabled={busy} onClick={() => void refresh()}>{t.taskRefresh}</button>
+  </section>;
+}
+
+function Review({ id, lang, t }: { id: string; lang: Lang; t: Copy }) {
   const [item, setItem] = useState<Approval>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
@@ -76,12 +144,14 @@ function Review({ id, t }: { id: string; t: Copy }) {
   useEffect(() => { void run(); }, [id]);
   if (error === "login_required" || error === "invalid_token") return <Login t={t} reviewId={id} />;
   return <section className="review">
-    <a href="/">{t.back}</a><h1>{t.review}</h1><p>{t.reviewIntro}</p>
+    <a href={sitePath("/")}>{t.back}</a><h1>{t.review}</h1><p>{t.reviewIntro}</p>
     <ErrorNotice error={error} t={t} />
     {item && <>
       <div className="row"><strong>{t.status[item.status]}</strong><span>{t.quote} · {item.quote.credits}</span></div>
-      <Artifact data={item.action} />
-      {item.receipt && <Artifact data={item.receipt} />}
+      <Artifact data={item.action} lang={lang} />
+      {item.receipt && ("task" in item.receipt
+        ? <TaskStatus key={item.receipt.task.id} initial={item.receipt.task} t={t} lang={lang} />
+        : <Artifact data={item.receipt} lang={lang} />)}
       <ErrorNotice error={item.error ?? ""} t={t} />
       {item.status === "pending" && (item.quote.expiresAt > Date.now()
         ? <div className="row"><button className="solid" disabled={busy} onClick={() => run("decision", true)}>{t.approve}</button>
@@ -99,6 +169,8 @@ function Studio({ preferences }: { preferences: ReturnType<typeof usePreferences
   const [session, setSession] = useState<"loading" | "guest" | "signed">("loading");
   const [conv, setConv] = useState<Conversation>();
   const [projectId, setProject] = useState("");
+  const [media, setMedia] = useState(false);
+  const [mediaTurn, setMediaTurn] = useState<Turn>();
   const [projects, setProjects] = useState<Project[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [history, setHistory] = useState<Entry[]>([]);
@@ -115,7 +187,8 @@ function Studio({ preferences }: { preferences: ReturnType<typeof usePreferences
   const [collapsed, setCollapsed] = useState(false);
   const [full, setFull] = useState(false);
   const [width, setWidth] = useState(420);
-  const [preview, setPreview] = useState<{ turn: Turn; canvasId: string }>();
+  const [preview, setPreview] = useState<{ turn: Turn; canvasId: string; canvases: Project[] }>();
+  const [editor, setEditor] = useState<{ turnId: string; artifact: Record<string, unknown> }>();
   const lastSaved = useRef("");
   const saveQueue = useRef(Promise.resolve());
   const creating = useRef<Promise<Conversation> | undefined>(undefined);
@@ -129,7 +202,8 @@ function Studio({ preferences }: { preferences: ReturnType<typeof usePreferences
     setError(code);
   };
   useEffect(() => {
-    void http("/api/me").then(async () => {
+    void http<{ media: boolean; scopes: string[] }>("/api/me").then(async ({ media, scopes }) => {
+      setMedia(media && scopes.includes("media:generate"));
       const [history, p, m] = await Promise.allSettled([
         http<Entry[]>("/api/conversations"), http<Project[]>("/api/projects"), http<Model[]>("/api/models"),
       ]);
@@ -179,7 +253,7 @@ function Studio({ preferences }: { preferences: ReturnType<typeof usePreferences
   function apply(next: Conversation) {
     setConv(next); setProject(next.project_id ?? ""); setDraft(next.draft ?? blank);
     lastSaved.current = JSON.stringify(next.draft ?? blank);
-    setSelected(undefined); setView("chat"); setError(""); setSaved(false); setPreview(undefined);
+    setSelected(undefined); setView("chat"); setError(""); setSaved(false); setPreview(undefined); setEditor(undefined); setMediaTurn(undefined);
   }
   async function load(id: string) {
     if (conv) await save(conv.id, draft);
@@ -245,6 +319,8 @@ function Studio({ preferences }: { preferences: ReturnType<typeof usePreferences
         setConv(next);
       }
       setProject(id);
+      setPreview(undefined);
+      setMediaTurn(undefined);
     } catch (err) { fail(err); }
   }
 
@@ -257,6 +333,29 @@ function Studio({ preferences }: { preferences: ReturnType<typeof usePreferences
       setDraft((value) => ({ ...value, attachment: { name: file.name.slice(0, 160), text: content } }));
     } catch (err) { fail(err); }
   }
+  async function chooseCanvas(turn: Turn) {
+    if (!projectId) return;
+    setOpening(true);
+    try {
+      const canvases = await http<Project[]>(`/api/projects/${encodeURIComponent(projectId)}/canvases`);
+      setPreview({ turn, canvases, canvasId: canvases.length === 1 ? canvases[0].id : "" });
+    } catch (err) { fail(err); }
+    finally { setOpening(false); }
+  }
+
+  async function revise(e: FormEvent) {
+    e.preventDefault();
+    if (!conv || !editor) return;
+    setOpening(true);
+    try {
+      const next = await http<Conversation>("/api/conversations/" + conv.id + "/revision", "POST", editor);
+      setConv(next);
+      setSelected(next.turns.at(-1)?.id);
+      setEditor(undefined);
+    } catch (err) { fail(err); }
+    finally { setOpening(false); }
+  }
+
   async function prepare(e: FormEvent) {
     e.preventDefault();
     if (!preview || !projectId) return;
@@ -265,9 +364,9 @@ function Studio({ preferences }: { preferences: ReturnType<typeof usePreferences
       const canvasId = encodeURIComponent(preview.canvasId.trim());
       const { revision } = await http<{ revision: string }>(`/api/projects/${encodeURIComponent(projectId)}/canvases/${canvasId}`);
       const payload: Action = { kind: "canvas", projectId, canvasId: preview.canvasId.trim(), revision,
-        shots: preview.turn.artifact?.shots as z.infer<typeof shot>[] };
+        shots: preview.turn.artifact?.shots as Shot[] };
       const result = await http<Approval>("/api/approvals", "POST", { requestId: crypto.randomUUID(), payload });
-      location.assign("/review/" + result.id);
+      location.assign(sitePath("/review/" + result.id));
     } catch (err) { fail(err); }
     finally { setBusy(false); }
   }
@@ -336,11 +435,20 @@ function Studio({ preferences }: { preferences: ReturnType<typeof usePreferences
           </div>}
           {conv?.turns.map((turn) => <article key={turn.id} className="turn">
             <div className="message user"><b>{t.you}</b><p>{turn.input.text}</p></div>
-            <div className="message"><b>Supdance · {t.skills[turn.input.skill]}</b>
-              {turn.artifact ? <Artifact data={turn.artifact} /> : <p>{turn.output}</p>}
+            <div className="message"><b>Supdance · {t.skills[turn.input.skill]}{turn.editedFrom ? " · " + t.edited : ""}</b>
+              {turn.artifact ? <Artifact data={turn.artifact} lang={lang} /> : <p>{turn.output}</p>}
               {turn.status !== "done" && <span className="badge">{t.status[turn.status as keyof Copy["status"]] ?? turn.status}</span>}
               <ErrorNotice error={turn.error ?? ""} t={t} />
+              {turn.input.skill === "plan" && Array.isArray(turn.artifact?.steps) && <div className="row wrap">
+                {(turn.artifact.steps as { skill: Draft["skill"]; reason: string }[]).map(({ skill, reason }, index) =>
+                  <button key={index} disabled={running || opening} onClick={() => {
+                    setSelected(turn.id);
+                    setDraft({ ...draft, skill, text: reason });
+                    composer.current?.focus();
+                  }}>{t.useStep} · {t.skills[skill]}</button>)}
+              </div>}
               <div className="row wrap">
+                {turn.artifact && <button disabled={running || opening} onClick={() => setEditor({ turnId: turn.id, artifact: turn.artifact! })}>{t.edit}</button>}
                 {turn.status === "done" && <button disabled={running} aria-pressed={selected === turn.id} onClick={() => { setSelected(turn.id); composer.current?.focus(); }}>{t.branch}</button>}
                 {turn.status === "done" && <button disabled={running} onClick={() => {
                   setSelected(turn.id); setDraft({ ...draft, skill: turn.input.skill, text: window.getSelection()?.toString().slice(0, 16000) ?? "" });
@@ -348,14 +456,31 @@ function Studio({ preferences }: { preferences: ReturnType<typeof usePreferences
                 }}>{t.revise}</button>}
                 {turn.status !== "running" && <button disabled={running} onClick={() => send(turn.input)}>{t.retry}</button>}
                 {turn.input.skill === "storyboard" && turn.artifact && projectId && <button disabled={running}
-                  onClick={() => setPreview({ turn, canvasId: "" })}>{t.storyboardAction}</button>}
+                  onClick={() => void chooseCanvas(turn)}>{t.storyboardAction}</button>}
+                {media && turn.input.skill === "storyboard" && turn.artifact && projectId && <button disabled={running || opening}
+                  onClick={() => setMediaTurn(turn)}>{t.media}</button>}
               </div>
             </div>
           </article>)}
-          {preview && <form className="settings" onSubmit={prepare}>
-            <label>{t.canvasId}<input required value={preview.canvasId} onChange={(e) => setPreview({ ...preview, canvasId: e.target.value })} /></label>
-            <button className="solid" disabled={running}>{t.prepare}</button>
+          {editor && <form className="settings" onSubmit={revise}>
+            <strong>{t.edit}</strong>
+            <ArtifactFields data={editor.artifact} lang={lang} change={(artifact) => setEditor({ ...editor, artifact })} />
+            <div className="row wrap">
+              <button className="solid" disabled={running || opening}>{t.saveEdit}</button>
+              <button type="button" onClick={() => setEditor(undefined)}>{t.cancelEdit}</button>
+            </div>
           </form>}
+          {preview && <form className="settings" onSubmit={prepare}>
+            <label>{t.canvasId}
+              <select required value={preview.canvasId} onChange={(e) => setPreview({ ...preview, canvasId: e.target.value })}>
+                <option value="">{preview.canvases.length ? t.chooseCanvas : t.noCanvas}</option>
+                {preview.canvases.map(({ id, title }) => <option key={id} value={id}>{title}</option>)}
+              </select>
+            </label>
+            <button className="solid" disabled={running || !preview.canvasId}>{t.prepare}</button>
+          </form>}
+          {mediaTurn && projectId && <MediaRequest key={mediaTurn.id} t={t} projectId={projectId}
+            shots={mediaTurn.artifact?.shots as Shot[]} onError={fail} />}
           {running && <div className="message" role="status"><b>{t.loading}</b><p>{partial}</p></div>}
           <div ref={bottom} />
         </>}
@@ -385,9 +510,9 @@ function Studio({ preferences }: { preferences: ReturnType<typeof usePreferences
 
 function App() {
   const preferences = usePreferences();
-  const id = location.pathname.match(/^\/review\/([\w-]+)$/)?.[1];
+  const id = location.pathname.slice(siteBase.length).match(/^\/review\/([\w-]+)$/)?.[1];
   return <div data-plugin-scope="supdance" data-theme={preferences.theme}>
-    {id ? <Review id={id} t={copy[preferences.lang]} /> : <Studio preferences={preferences} />}
+    {id ? <Review id={id} lang={preferences.lang} t={copy[preferences.lang]} /> : <Studio preferences={preferences} />}
   </div>;
 }
 createRoot(document.getElementById("root")!).render(<App />);

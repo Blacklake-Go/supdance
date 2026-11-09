@@ -8,7 +8,7 @@ import { Conversations } from "./conversations";
 import { openDatabase } from "./database";
 import { asFailure, Failure } from "./errors";
 import { mcp } from "./mcp";
-import { action, draft, ID, text, turnInput } from "../shared/contracts";
+import { action, draft, ID, mediaKind, text, turnInput } from "../shared/contracts";
 import { version } from "../package.json";
 
 export function application(config: Config, assets: { index: string; app: string; css: string; widget: string; icon: Uint8Array<ArrayBuffer> }) {
@@ -29,20 +29,33 @@ export function application(config: Config, assets: { index: string; app: string
   }
   const deps = { config, auth, db, bridge, actions, widget: assets.widget };
   const html = { "content-type": "text/html; charset=utf-8" };
+  const index = assets.index.replace('content="__SUPDANCE_BASE__"', `content="${config.webBase}"`)
+    .replace(/__SUPDANCE_BASE__\//g, config.webBase + "/");
   const noContent = () => new Response(null, { status: 204 });
   const json = (data: unknown, status = 200, headers?: HeadersInit) => Response.json(data, { status, headers });
 
   async function route(req: Request) {
     const url = new URL(req.url);
-    const path = url.pathname, method = req.method;
+    const resourcePath = url.pathname === "/mcp" || url.pathname.startsWith("/.well-known/oauth-protected-resource");
+    const method = req.method;
+    if (method === "GET" && url.pathname === "/healthz") return json({ name: "Supdance", version, status: "ok" });
+    if (method === "GET" && url.pathname === "/readyz") {
+      db.query("SELECT 1").get();
+      return json({ configured: Boolean(config.oauth && config.bridge) }, config.oauth && config.bridge ? 200 : 503);
+    }
+    if (!config.local) {
+      const expectedHost = new URL(resourcePath ? config.origin : config.webOrigin).host;
+      if (url.host !== expectedHost) throw new Failure(404, "not_found");
+    }
+    if (method === "GET" && (url.pathname === "/.well-known/oauth-protected-resource" || url.pathname === "/.well-known/oauth-protected-resource/mcp")) {
+      return json(auth.metadata());
+    }
+    if (!resourcePath && config.webBase && url.pathname !== config.webBase && !url.pathname.startsWith(config.webBase + "/")) {
+      throw new Failure(404, "not_found");
+    }
+    const path = resourcePath ? url.pathname : url.pathname.slice(config.webBase.length) || "/";
     if (method === "GET") {
-      if (path === "/healthz") return json({ name: "Supdance", version, status: "ok" });
-      if (path === "/readyz") {
-        db.query("SELECT 1").get();
-        return json({ configured: Boolean(config.oauth && config.bridge) }, config.oauth && config.bridge ? 200 : 503);
-      }
-      if (path === "/.well-known/oauth-protected-resource" || path === "/.well-known/oauth-protected-resource/mcp") return json(auth.metadata());
-      if (path === "/" || /^\/review\/[\w-]{1,128}$/.test(path)) return new Response(assets.index, { headers: html });
+      if (path === "/" || /^\/review\/[\w-]{1,128}$/.test(path)) return new Response(index, { headers: html });
       if (path === "/app.js") return new Response(assets.app, { headers: { "content-type": "text/javascript; charset=utf-8" } });
       if (path === "/styles.css") return new Response(assets.css, { headers: { "content-type": "text/css; charset=utf-8" } });
       if (path === "/icon.png") return new Response(assets.icon, { headers: { "content-type": "image/png" } });
@@ -87,7 +100,7 @@ export function application(config: Config, assets: { index: string; app: string
       return auth.callback(req, url);
     }
     if (!path.startsWith("/api/")) throw new Failure(404, "not_found");
-    if (method !== "GET" && req.headers.get("origin") !== config.origin) throw new Failure(403, "origin_forbidden");
+    if (method !== "GET" && req.headers.get("origin") !== config.webOrigin) throw new Failure(403, "origin_forbidden");
     if (path === "/api/logout" && method === "POST") return auth.logout(req);
     rate();
     const actor = await auth.browser(req);
@@ -100,6 +113,23 @@ export function application(config: Config, assets: { index: string; app: string
     if (path === "/api/projects" && method === "GET") {
       requireScope(actor, "projects:read");
       return json(await bridge.projects(actor));
+    }
+    const mediaModels = path.match(/^\/api\/media-models\/(image|video|music)$/);
+    if (mediaModels && method === "GET") {
+      requireScope(actor, "media:generate");
+      if (!config.media) throw new Failure(403, "media_disabled");
+      return json(await bridge.mediaModels(actor, mediaKind.parse(mediaModels[1])));
+    }
+    const taskRoute = path.match(/^\/api\/projects\/([\w-]{1,128})\/tasks\/([\w-]{1,128})$/);
+    if (taskRoute && method === "GET") {
+      requireScope(actor, "media:read");
+      if (!config.media) throw new Failure(403, "media_disabled");
+      return json(await bridge.task(actor, taskRoute[1], taskRoute[2]));
+    }
+    const canvasesRoute = path.match(/^\/api\/projects\/([\w-]{1,128})\/canvases$/);
+    if (canvasesRoute && method === "GET") {
+      requireScope(actor, "canvas:read");
+      return json(await bridge.canvases(actor, canvasesRoute[1]));
     }
     const canvasRoute = path.match(/^\/api\/projects\/([\w-]{1,128})\/canvases\/([\w-]{1,128})$/);
     if (canvasRoute && method === "GET") {
@@ -127,7 +157,7 @@ export function application(config: Config, assets: { index: string; app: string
         return json(await conversations.create(actor, title, projectId), 201);
       }
     }
-    const match = path.match(/^\/api\/conversations\/([\w-]{1,128})(?:\/(draft|turns|stop|project))?$/);
+    const match = path.match(/^\/api\/conversations\/([\w-]{1,128})(?:\/(draft|turns|stop|project|revision))?$/);
     if (match) {
       const [, id, op] = match;
       if (method === "GET" && !op) return json(conversations.detail(actor, id));
@@ -138,6 +168,10 @@ export function application(config: Config, assets: { index: string; app: string
         return json(await conversations.setProject(actor, id, projectId));
       }
       if (method === "POST" && op === "stop") { conversations.stop(actor, id); return noContent(); }
+      if (method === "POST" && op === "revision") {
+        const { turnId, artifact } = z.strictObject({ turnId: ID, artifact: z.record(z.string(), z.unknown()) }).parse(await body(req));
+        return json(conversations.revise(actor, id, turnId, artifact), 201);
+      }
       if (method === "POST" && op === "turns") {
         return new Response(conversations.stream(actor, id, turnInput.parse(await body(req))), {
           headers: { "content-type": "application/x-ndjson; charset=utf-8", "x-accel-buffering": "no" },

@@ -17,8 +17,10 @@
 | --- | --- | --- |
 | GET /v1/projects | 仅当前授权的项目，最多 100 个 | `[{id,title,summary}]` |
 | GET /v1/projects/:id | 项目 ACL | `{id,title,summary}` |
+| GET /v1/projects/:projectId/canvases | 当前用户有权访问的画布，最多 100 个 | `[{id,projectId,title}]` |
 | GET /v1/projects/:projectId/canvases/:canvasId | 读取 ACL 和实际版本，最多 100 个最小节点摘要 | `{id,projectId,revision,nodes:[{id,type,label}]}` |
 | GET /v1/projects/:projectId/tasks/:taskId | 按项目和所有权查媒体任务 | `{id,projectId,kind,status,progress?,assetIds,errorCode?}` |
+| GET /v1/media/models/:kind | 当前用户可选的 image、video 或 music 型号 | `[{id,name}]` |
 | GET /v1/text/models | 当前用户可用且已包含在权益内的文本型号 | `[{id,name}]` |
 | POST /v1/text/stream | `{skill,language,model?,brief,context?,projectId?,instructions,schema?,maxCredits:0}` | UTF-8 `text/plain` 流。自由对话是文本，技能结果为单一 JSON 对象 |
 | POST /v1/actions/preview | `{action}`，校验项目权限、画布版本和媒体价格，生成绑定的限时报价 | `{id,credits,expiresAt}` |

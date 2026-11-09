@@ -5,11 +5,13 @@
 - [清单](../plugin/plugin.json) 含中英文介绍、示例、版本说明、五条正向及三条负向审核用例。用例描述期望行为，实际 OpenAI 平台测试需在远程连接就绪后执行。
 - [图标](../plugin/assets/icon.png) 是独立的 512 × 512 PNG。 [短剧技能](../plugin/skills/short-drama/SKILL.md) 随包分发。
 - [隐私、条款与支持草案](policy-draft.md) 按已实现的数据路径起草。发布者确认实际运营、留存和删除流程后再发布政策页面。
-- [包脚本](../scripts/package.ts) 在提供实际 MCP 地址时写入 `mcp.json`，声明 HTTPS Streamable HTTP、DCR 和基础作用域。候选 ZIP 缺少远端地址时仅包含清单、技能与图标。为公开提交运行严格模式，设置以下值。
+- [包脚本](../scripts/package.ts) 在提供实际 MCP 地址时写入 `mcp.json`，声明 HTTPS Streamable HTTP、OAuth 客户端注册方式和基础作用域。候选 ZIP 缺少远端地址时仅包含清单、技能与图标。为公开提交运行严格模式，设置以下值。
 
 | 配置 | 含义 |
 | --- | --- |
 | `SUPDANCE_PLUGIN_PACKAGE_MCP_URL` | 经部署并验证的公开 HTTPS MCP URL |
+| `SUPDANCE_PLUGIN_PACKAGE_OAUTH_CLIENT_ID` | 可选。指定专用预注册客户端，省略时声明 DCR |
+| `SUPDANCE_PLUGIN_PACKAGE_OAUTH_CLIENT_AUTH` | 可选。预注册客户端认证方法，默认 `client_secret_basic` |
 | `SUPDANCE_PLUGIN_PUBLISHER` | 已验证的 OpenAI 开发者名称 |
 | `SUPDANCE_PLUGIN_PRIVACY_URL` / `SUPDANCE_PLUGIN_TERMS_URL` / `SUPDANCE_PLUGIN_SUPPORT_URL` | 实际适用于插件且公开可访问的页面 |
 | `SUPDANCE_PLUGIN_DEMO_URL` | 审核者可访问的真实演示 |

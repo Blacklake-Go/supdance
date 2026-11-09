@@ -96,7 +96,7 @@ export class Auth {
     this.db.run("INSERT INTO oauth_flows VALUES(?,?,?,?,?)", [digest(id), state, verifier, destination, Date.now() + 600000]);
     const url = new URL(oauth.authorization);
     url.search = new URLSearchParams({
-      response_type: "code", client_id: oauth.webId, redirect_uri: this.config.origin + "/oauth/callback",
+      response_type: "code", client_id: oauth.webId, redirect_uri: this.config.webOrigin + this.config.webBase + "/oauth/callback",
       state, code_challenge: digest(verifier), code_challenge_method: "S256", scope: this.supportedScopes.join(" "),
       resource: this.config.resource,
     }).toString();
@@ -122,7 +122,7 @@ export class Auth {
         headers: { authorization: basic(oauth.webId, oauth.webSecret), "content-type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           grant_type: "authorization_code", code, code_verifier: flow.verifier,
-          redirect_uri: this.config.origin + "/oauth/callback", resource: this.config.resource,
+          redirect_uri: this.config.webOrigin + this.config.webBase + "/oauth/callback", resource: this.config.resource,
         }),
       });
       if (!response.ok) throw new Error("token");
@@ -141,7 +141,7 @@ export class Auth {
       this.db.run("DELETE FROM web_sessions WHERE expires <= ? OR id=?", [Date.now(), digest(this.cookie(req, "session") || "")]);
       this.db.run("INSERT INTO web_sessions VALUES(?,?,?)", [digest(session), encrypted.toString("base64"), Date.now() + age * 1000]);
     })();
-    return this.redirect(flow.target, [this.setCookie("flow", "", 0), this.setCookie("session", session, age)]);
+    return this.redirect(this.config.webBase + flow.target, [this.setCookie("flow", "", 0), this.setCookie("session", session, age)]);
   }
 
   async browser(req: Request) {

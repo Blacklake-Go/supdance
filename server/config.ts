@@ -14,6 +14,12 @@ export function configuration(env = process.env) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid plugin port");
   const origin = url("ORIGIN", local ? `http://127.0.0.1:${port}` : undefined);
   if (!origin || new URL(origin).origin !== origin) throw new Error("A canonical plugin origin is required");
+  const webOrigin = url("WEB_ORIGIN", origin);
+  if (!webOrigin || new URL(webOrigin).origin !== webOrigin) throw new Error("Invalid web origin");
+  const webBase = env.SUPDANCE_PLUGIN_WEB_BASE ?? (local ? "" : "/supdance-studio");
+  if (webBase && (!/^\/[a-z][a-z0-9-]{1,62}$/.test(webBase) || ["/mcp", "/api", "/oauth"].includes(webBase))) {
+    throw new Error("Invalid plugin web base");
+  }
   const issuer = url("OAUTH_ISSUER");
   const authorization = url("OAUTH_AUTHORIZATION");
   const token = url("OAUTH_TOKEN");
@@ -32,7 +38,7 @@ export function configuration(env = process.env) {
   if (!local && (!oauth || !bridge || !bridgeSecret)) throw new Error("Production requires OAuth and the Supdance partner API");
   const media = env.SUPDANCE_PLUGIN_MEDIA_ENABLED === "1";
   return {
-    local, port, origin, resource: origin + "/mcp", oauth,
+    local, port, origin, webOrigin, webBase, resource: origin + "/mcp", oauth,
     bridge: bridge && bridgeSecret ? { url: bridge, secret: bridgeSecret } : undefined,
     database: env.SUPDANCE_PLUGIN_DATABASE || "./data/plugin.sqlite",
     media,

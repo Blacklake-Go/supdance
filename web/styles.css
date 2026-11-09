@@ -111,3 +111,7 @@
 @media (prefers-reduced-motion: reduce) {
   [data-plugin-scope="supdance"] :is(button, .button) { transition: none; transform: none; }
 }
+[data-plugin-scope="supdance"] .artifact-fields { display: grid; gap: 8px; }
+[data-plugin-scope="supdance"] .artifact-fields fieldset { min-width: 0; margin: 0; padding: 8px; border: 1px solid var(--sd-line); border-radius: var(--sd-radius); }
+[data-plugin-scope="supdance"] .artifact-fields textarea { min-height: 44px; }
+[data-plugin-scope="supdance"] .artifact-fields input { width: 100%; }
