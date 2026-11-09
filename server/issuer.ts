@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import Provider, { errors, interactionPolicy, type Configuration } from "oidc-provider";
 import { z } from "zod";
 import { scopes } from "../shared/contracts";
+import { renderConsentHtml, renderSignInHtml } from "./issuer-ui";
 import { issuerStore } from "./issuer-store";
 
 const studioScopes = scopes.filter((scope) => !scope.startsWith("media:"));
@@ -163,11 +164,10 @@ export function createIssuer(config: IssuerConfig) {
     if (interaction.uid !== match[1]) return reply(res, 400, "Invalid authorization request");
     const subject = await siteUser(req);
     if (!subject) {
-      return page(res, "Sign in to Supdance / 登录 Supdance", `
-        <p>Sign in with your Supdance account, then return to this window to continue.</p>
-        <p>请先登录 Supdance，再返回此窗口继续。</p>
-        <p><a target="_blank" rel="noopener noreferrer" href="${loginPage}">Open Supdance login / 打开登录页</a></p>
-        <p><a href="${config.base}/interaction/${match[1]}">Continue / 继续</a></p>`);
+      return renderPage(res, renderSignInHtml({
+        loginPage,
+        continueUrl: `${config.base}/interaction/${match[1]}`,
+      }));
     }
     const prompt = interaction.prompt.name;
     if (prompt !== "login" && prompt !== "consent") return reply(res, 400, "Unsupported authorization request");
@@ -178,16 +178,15 @@ export function createIssuer(config: IssuerConfig) {
       const clientName = clientId === config.webId ? "Supdance Studio" : redirect.protocol === "http:" ? "Codex" : "ChatGPT";
       const permissions = String(interaction.params.scope || "").split(/\s+/).filter((scope) => studioScopes.some((allowed) => allowed === scope));
       const heading = prompt === "login" ? "Continue with Supdance / 使用 Supdance 继续" : "Authorize Supdance / 授权 Supdance";
-      return page(res, heading, `
-        <p>Continue to ${clientName} with your signed-in Supdance account.</p>
-        <p>将当前 Supdance 账号连接到 ${clientName}。</p>
-        <ul>${permissions.map((scope) => `<li>${scope}</li>`).join("")}</ul>
-        <p>Canvas changes still require separate confirmation. 画布改动仍需逐次确认。</p>
-        <form method="post" action="${config.base}/interaction/${match[1]}">
-          <input type="hidden" name="proof" value="${proof}">
-          <button name="decision" value="allow">${prompt === "login" ? "Continue / 继续" : "Authorize / 授权"}</button>
-          <button name="decision" value="deny">Cancel / 取消</button>
-        </form>`);
+      return renderPage(res, renderConsentHtml({
+        heading,
+        clientName,
+        subject,
+        permissions,
+        prompt,
+        actionUrl: `${config.base}/interaction/${match[1]}`,
+        proof,
+      }));
     }
     if (req.headers.origin !== config.origin || !req.headers["content-type"]?.startsWith("application/x-www-form-urlencoded")) {
       return reply(res, 403, "Invalid confirmation");
@@ -247,11 +246,10 @@ function reply(res: ServerResponse, status: number, text: string) {
   res.end(text);
 }
 
-function page(res: ServerResponse, title: string, content: string) {
+function renderPage(res: ServerResponse, html: string) {
   res.writeHead(200, {
     "Content-Type": "text/html; charset=utf-8",
-    "Content-Security-Policy": "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   });
-  res.end(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Supdance</title><main><h1>${title}</h1>${content}</main></html>`);
+  res.end(html);
 }
