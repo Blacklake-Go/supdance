@@ -27,6 +27,10 @@
 - 公共 MCP 工具目录与 widget 模板支持匿名发现。用户数据和工具执行需要带作用域的 OAuth token。未经认证的调用会带 OAuth challenge。限制 MCP 请求 Origin、体积、每分钟总量和单用户次数；上线在网关配更严格的按 IP/用户配额和拥塞监控。
 - Codex 接入示例使用 `codex mcp add supdance --url "$SUPDANCE_PLUGIN_ORIGIN/mcp" --oauth-client-registration dcr`，随后执行 `codex mcp login supdance`。用项目级配置或受控的用户配置保留隔离。ChatGPT 使用发布包声明的 HTTPS MCP，实测前在 OpenAI 开发模式接入新连接。
 
-当前目标域对应的现有授权服务公开发现地址是 `https://openid.supdance.com/.well-known/openid-configuration`。使用 `bun run preflight` 对目标地址进行只读发现检查。检查通过后仍需实测以 `https://www.supdance.com/mcp` 为资源的 token、插件作用域、回调 issuer、撤销和主站用户绑定。不要以普通 OIDC 登录 token 代替受众限定的 MCP access token。
+本项目使用独立 issuer `https://www.supdance.com/supdance-auth`，通过主站 `/api/auth/session` 验证浏览器登录和稳定用户 ID。独立的 Node 容器运行 OpenID Certified 的 `oidc-provider`，在自己的 SQLite 卷中保存授权状态。主站 Cookie 仅用来实时验证会话，插件令牌绑定 `https://www.supdance.com/mcp`，内省客户端和网站客户端各自使用独立凭据。
+
+通过 `docker compose -p supdance-openai-auth -f deploy/compose.issuer.yml up -d --build` 启动 issuer。将 issuer 配置放入权限 0600 的 `.env.issuer`，签名私钥以只读方式从 `secrets/issuer-jwks.json` 挂载。设置同一主域的 `SUPDANCE_PLUGIN_ORIGIN`、带 `/supdance-auth` 的 `SUPDANCE_PLUGIN_OAUTH_ISSUER`、两个专用 OAuth 客户端的 ID 和 32 字节十六进制秘密，以及独立的 `SUPDANCE_PLUGIN_ISSUER_COOKIE_KEY`。保护 OAuth 数据卷和签名密钥备份。接入 [issuer 路由](../deploy/nginx-issuer.conf) 后运行 `bun run preflight` 验证公开发现，再运行真实账号的 PKCE、撤销及主站 ACL 测试。
+
+插件 `/readyz` 从配置的合作方基础地址认证访问 `/v1/healthz`。合作方需要返回 `{"status":"ok","version":1}`。发现可用时，仍需单独验收业务就绪和零扣分文本权益。
 
 参考 [OpenAI OAuth](https://developers.openai.com/plugins/build/auth) 和 [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)。

@@ -24,6 +24,7 @@ jobs:
         env:
           SUPDANCE_PLUGIN_PACKAGE_MCP_URL: https://www.supdance.com/mcp
       - run: docker build -t supdance:ci .
+      - run: docker build -f deploy/Dockerfile.issuer -t supdance-oauth:ci .
       - uses: actions/upload-artifact@v4
         with:
           name: supdance-plugin-candidate

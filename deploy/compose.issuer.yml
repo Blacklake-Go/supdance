@@ -1,0 +1,18 @@
+services:
+  oauth:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.issuer
+    env_file: ../.env.issuer
+    environment:
+      SUPDANCE_PLUGIN_ISSUER_DATABASE: /data/issuer.sqlite
+      SUPDANCE_PLUGIN_ISSUER_PORT: "8788"
+      SUPDANCE_PLUGIN_ISSUER_JWKS: /run/secrets/issuer-jwks.json
+    ports:
+      - "127.0.0.1:8788:8788"
+    volumes:
+      - issuer-data:/data
+      - ../secrets/issuer-jwks.json:/run/secrets/issuer-jwks.json:ro
+    restart: unless-stopped
+volumes:
+  issuer-data:

@@ -41,7 +41,8 @@ export function application(config: Config, assets: { index: string; app: string
     if (method === "GET" && url.pathname === "/healthz") return json({ name: "Supdance", version, status: "ok" });
     if (method === "GET" && url.pathname === "/readyz") {
       db.query("SELECT 1").get();
-      return json({ configured: Boolean(config.oauth && config.bridge) }, config.oauth && config.bridge ? 200 : 503);
+      const partnerReady = Boolean(config.oauth) && await bridge.ready();
+      return json({ configured: Boolean(config.oauth && config.bridge), partnerReady }, partnerReady ? 200 : 503);
     }
     if (!config.local) {
       const expectedHost = new URL(resourcePath ? config.origin : config.webOrigin).host;
