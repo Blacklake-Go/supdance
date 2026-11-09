@@ -1,0 +1,14 @@
+services:
+  supdance:
+    build: .
+    env_file: .env.production
+    environment:
+      SUPDANCE_PLUGIN_DATABASE: /data/plugin.sqlite
+      SUPDANCE_PLUGIN_PORT: "8787"
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - plugin-data:/data
+    restart: unless-stopped
+volumes:
+  plugin-data:
