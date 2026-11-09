@@ -22,11 +22,11 @@
 | GET /v1/projects/:projectId/tasks/:taskId | 按项目和所有权查媒体任务 | `{id,projectId,kind,status,progress?,assetIds,errorCode?}` |
 | GET /v1/media/models/:kind | 当前用户可选的 image、video 或 music 型号 | `[{id,name}]` |
 | GET /v1/text/models | 当前用户可用且已包含在权益内的文本型号 | `[{id,name}]` |
-| POST /v1/text/stream | `{skill,language,model?,brief,context?,projectId?,instructions,schema?,maxCredits:0}` | UTF-8 `text/plain` 流。自由对话是文本，技能结果为单一 JSON 对象 |
+| POST /v1/text/stream | `{skill,language,model?,brief,context?,projectId?,instructions,schema?,maxCredits}` | UTF-8 `text/plain` 流。自由对话是文本，技能结果为单一 JSON 对象 |
 | POST /v1/actions/preview | `{action}`，校验项目权限、画布版本和媒体价格，生成绑定的限时报价 | `{id,credits,expiresAt}` |
 | POST /v1/actions/commit | `{action,quoteId,maxCredits}` 与 `Idempotency-Key`，原子提交 | 项目记录、画布版本及节点 ID，或媒体任务回执 |
 
-文本流只允许使用已有权益且请求不会额外扣除积分的模型。合作方将 `instructions` 放在系统指令层，把用户创作内容、附件、历史和授权项目数据放在输入层。项目上下文不得扩大用户权限。建议限制上游并发和生成体积，客户端断开时终止推理。接口返回 402 表示权益不满足。若文本也按次扣分，需要先新增单独的报价及确认流程。
+公开用户的文本流只允许使用已有零扣分权益，插件声明 `maxCredits:0`。专用审核账号由 `SUPDANCE_PLUGIN_REVIEW_SUBJECT` 精确指定，插件声明 `maxCredits:1000000`（1 积分，单位微积分）；宿主也必须独立校验相同审核身份、模型、报价和额度，费用从该内部账号余额结算。其他账号或超过上限的请求返回 402。合作方将 `instructions` 放在系统指令层，把用户创作内容、附件、历史和授权项目数据放在输入层。项目上下文不得扩大用户权限。建议限制上游并发和生成体积，客户端断开时终止推理。公开用户若需按次扣分，应另建报价和确认流程。
 
 ## 预览和执行
 

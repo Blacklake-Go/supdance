@@ -14,6 +14,24 @@ const knownErrors = new Map([
 export class Bridge {
   constructor(private config: Config) {}
 
+  async ready() {
+    const bridge = this.config.bridge;
+    if (!bridge) return false;
+    try {
+      const response = await fetch(bridge.url + "/v1/healthz", {
+        headers: { authorization: "Bearer " + bridge.secret, accept: "application/json" },
+        redirect: "error", signal: AbortSignal.timeout(3000),
+      });
+      if (!response.ok) {
+        await response.body?.cancel();
+        return false;
+      }
+      return z.object({ status: z.literal("ok"), version: z.literal(1) }).safeParse(await response.json()).success;
+    } catch {
+      return false;
+    }
+  }
+
   private async fetch(actor: Identity, route: string, body?: unknown, signal?: AbortSignal, key?: string) {
     if (!this.config.bridge) throw new Failure(503, "partner_unconfigured");
     const { url, secret } = this.config.bridge;
@@ -98,8 +116,8 @@ export class Bridge {
     const schema = input.skill === "chat" ? undefined : storySchemas[input.skill];
     const response = await this.fetch(actor, "/text/stream", {
       ...input, instructions: storyInstructions(input.skill, input.language), schema: schema ? z.toJSONSchema(schema) : undefined,
-      // This endpoint admits only entitlement-included text requests.
-      maxCredits: 0,
+      // Only the dedicated review identity may use the bounded paid model.
+      maxCredits: actor.subject === this.config.reviewSubject ? 1_000_000 : 0,
     }, signal);
     if (!response.headers.get("content-type")?.startsWith("text/plain")) {
       await response.body?.cancel();

@@ -38,14 +38,14 @@ export const mcp = (deps: {
   function register<I extends z.ZodObject, O extends z.ZodObject>(
     name: string, description: string, inputSchema: I, outputSchema: O,
     scope: Scope, write: boolean, handler: (actor: Identity, args: z.output<I>, signal: AbortSignal) => Promise<z.input<O>> | z.input<O>,
-    ui = false,
+    ui = false, idempotent = write,
   ) {
     const key = "supdance_" + name;
     const securitySchemes = [{ type: "oauth2", scopes: [scope] }];
     server.registerTool<z.ZodObject, z.ZodObject>(key, {
       title: name.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" "),
       description, inputSchema, outputSchema,
-      annotations: { readOnlyHint: !write, destructiveHint: false, idempotentHint: write, openWorldHint: true },
+      annotations: { readOnlyHint: !write, destructiveHint: false, idempotentHint: idempotent, openWorldHint: true },
       _meta: { securitySchemes, ...(ui ? { ui: { resourceUri: resource } } : {}) },
     }, async (args, extra): Promise<CallToolResult> => {
       try {
@@ -72,23 +72,25 @@ export const mcp = (deps: {
 
   for (const name of Object.keys(storySchemas) as StorySkill[]) {
     const [key, description] = labels[name];
-    register(key, description, storyInput, z.object({ artifact: storySchemas[name] }), "story:generate", false,
+    register(key, description, storyInput, z.object({ artifact: storySchemas[name] }), "story:generate", true,
       async (actor, args, signal) => {
         const result = await bridge.generate(actor, { ...args, skill: name }, signal, () => {});
         return { artifact: storySchemas[name].parse(result.artifact) };
-      });
+      }, false, false);
   }
 
   register("list_projects", "List projects accessible to the linked Supdance account.", z.strictObject({}),
     z.object({ projects: z.array(project).max(100) }), "projects:read", false, async (actor) => ({ projects: await bridge.projects(actor) }));
   register("get_project", "Read one accessible project and its summary.", z.strictObject({ projectId: ID }),
     z.object({ project }), "projects:read", false, async (actor, args) => ({ project: await bridge.project(actor, args.projectId) }));
-  register("create_project", "Prepare a new project for user confirmation. The project is created only after approval and commit.",
-    z.strictObject({ requestId: ID, title: text(240), summary: text(2000) }), approveResult, "projects:write", true,
-    async (actor, { requestId, ...payload }) => ({ approval: await actions.preview(actor, requestId, { kind: "project", ...payload }) }), true);
-  register("commit_project", "Commit a new project using its user-approved review ID.",
-    z.strictObject({ reviewId: ID }), approveResult, "projects:write", true,
-    async (actor, { reviewId }) => ({ approval: await actions.execute(actor, reviewId, "project") }), true);
+  if (config.projectsWrite) {
+    register("create_project", "Prepare a new project for user confirmation. The project is created only after approval and commit.",
+      z.strictObject({ requestId: ID, title: text(240), summary: text(2000) }), approveResult, "projects:write", true,
+      async (actor, { requestId, ...payload }) => ({ approval: await actions.preview(actor, requestId, { kind: "project", ...payload }) }), true);
+    register("commit_project", "Commit a new project using its user-approved review ID.",
+      z.strictObject({ reviewId: ID }), approveResult, "projects:write", true,
+      async (actor, { reviewId }) => ({ approval: await actions.execute(actor, reviewId, "project") }), true);
+  }
   register("list_canvases", "List canvases accessible in the selected project so the user can identify a target.",
     z.strictObject({ projectId: ID }), z.object({ canvases: z.array(canvasSummary).max(100) }), "canvas:read", false,
     async (actor, { projectId }) => ({ canvases: await bridge.canvases(actor, projectId) }));

@@ -2,7 +2,8 @@ import { z } from "zod";
 import { scopes } from "../shared/contracts";
 
 const mcp = new URL(process.env.SUPDANCE_PLUGIN_PACKAGE_MCP_URL || "https://www.supdance.com/mcp");
-const issuer = new URL(process.env.SUPDANCE_PLUGIN_OAUTH_ISSUER || "https://openid.supdance.com");
+const expectedIssuer = process.env.SUPDANCE_PLUGIN_OAUTH_ISSUER || "https://www.supdance.com/supdance-auth";
+const issuer = new URL(expectedIssuer);
 const provided = !!process.env.SUPDANCE_PLUGIN_PACKAGE_OAUTH_CLIENT_ID;
 const problems: string[] = [];
 for (const target of [mcp, issuer]) {
@@ -34,7 +35,7 @@ async function checkIssuer() {
       const response = await request(url);
       if (!response.ok) continue;
       const config = metadata.parse(await response.json());
-      if (config.issuer !== (process.env.SUPDANCE_PLUGIN_OAUTH_ISSUER || "https://openid.supdance.com")) {
+      if (config.issuer !== expectedIssuer) {
         problems.push("Authorization server issuer differs from the configured issuer.");
       }
       if (!provided && !config.registration_endpoint) problems.push("OAuth discovery has no DCR endpoint. Register a dedicated provided client or enable DCR.");

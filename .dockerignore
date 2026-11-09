@@ -1,6 +1,7 @@
 .git
 .github
 .env*
+secrets
 node_modules
 dist
 release
