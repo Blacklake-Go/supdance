@@ -57,7 +57,7 @@ export function createIssuer(config: IssuerConfig) {
 
   async function siteUser(req: IncomingMessage) {
     const cookies = (req.headers.cookie || "").split(";").map((part) => part.trim());
-    const session = cookies.filter((part) => /^open_ai_canvas_session=[A-Za-z0-9_-]{20,256}$/.test(part));
+    const session = cookies.filter((part) => /^open_ai_canvas_session=[a-f0-9]{32}\.[a-f0-9]{64}$/.test(part));
     if (session.length !== 1) return null;
     const response = await fetch(config.origin + "/api/auth/session", {
       headers: { cookie: session[0], accept: "application/json" },
