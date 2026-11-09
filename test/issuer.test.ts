@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { createIssuer } from "../server/issuer";
 
 test("Supdance issuer binds PKCE to the account, client and resource, and revokes its access token", async () => {
-  const accountSession = "qa-session-" + "s".repeat(28);
+  const accountSession = "a".repeat(32) + "." + "b".repeat(64);
   let upstream = "";
   const main = Bun.serve({
     hostname: "127.0.0.1", port: 0,
