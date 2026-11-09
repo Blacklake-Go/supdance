@@ -16,7 +16,7 @@
 
 ### 插件目录页面
 
-将 `public/openai-plugin/` 下的三个 HTML 文件部署到 `/opt/supdance-openai-plugin/public/`，并在主域 HTTPS vhost 中接入 [目录页面路由](../deploy/nginx-listing-pages.conf)。[支持](https://www.supdance.com/openai-plugin/support)、[隐私政策](https://www.supdance.com/openai-plugin/privacy)和[服务条款](https://www.supdance.com/openai-plugin/terms)需允许匿名 HTTPS 访问；发布后逐一校验响应内容，再更新插件 ZIP。单独回滚这组页面时，只移除对应路由并校验后 reload。三个地址在 `plugin/plugin.json` 中维护，目录页面部署可独立于 MCP 服务。
+将 `public/openai-plugin/` 下的三个 HTML 文件部署到 `/opt/supdance-openai-plugin/public/`，并在主域 HTTPS vhost 中接入 [目录页面路由](../deploy/nginx-listing-pages.conf)。[支持](https://www.supdance.com/openai-plugin/support)、[隐私政策](https://www.supdance.com/openai-plugin/privacy)和[服务条款](https://www.supdance.com/openai-plugin/terms)需允许匿名 HTTPS 访问；发布后逐一校验响应内容，再更新插件 ZIP。单独回滚这组页面时，只移除对应路由并校验后 reload。三个地址在 `plugin/plugin.json` 中维护，目录页面部署可独立于 MCP 服务。审核演示 `https://www.supdance.com/openai-plugin/review-demo.mp4` 使用同一目录下的 `review-demo.mp4`，只允许匿名读取该视频文件。
 
 ## OAuth
 
