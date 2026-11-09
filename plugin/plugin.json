@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "supdance",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Develop short dramas in Chinese or English and review storyboard changes for an authorized Supdance canvas.",
   "keywords": ["short-drama", "storyboard", "screenwriting"],
   "extensions": {
@@ -13,6 +13,9 @@
         "category": "Creativity",
         "capabilities": ["Read", "Write"],
         "websiteURL": "https://www.supdance.com",
+        "supportURL": "https://www.supdance.com/openai-plugin/support",
+        "privacyPolicyURL": "https://www.supdance.com/openai-plugin/privacy",
+        "termsOfServiceURL": "https://www.supdance.com/openai-plugin/terms",
         "logo": "./assets/icon.png",
         "composerIcon": "./assets/icon.png",
         "defaultPrompt": [
@@ -37,7 +40,7 @@
         }
       },
       "publication": {
-        "release_notes": "Bilingual short-drama drafts, editable revisions and approved storyboard changes.",
+        "release_notes": "Adds public support, privacy and terms pages for the Supdance OpenAI plugin.",
         "translations": {
           "zh-CN": {
             "subtitle": "短剧创作与分镜协作",

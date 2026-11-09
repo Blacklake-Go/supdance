@@ -27,7 +27,7 @@ if (submission) {
   fields.interface.developerName = z.string().trim().min(1).max(80).parse(process.env.SUPDANCE_PLUGIN_PUBLISHER);
   for (const [field, name] of [
     ["privacyPolicyURL", "PRIVACY_URL"], ["termsOfServiceURL", "TERMS_URL"], ["supportURL", "SUPPORT_URL"],
-  ]) fields.interface[field] = publicHttps.parse(process.env["SUPDANCE_PLUGIN_" + name]);
+  ]) fields.interface[field] = publicHttps.parse(process.env["SUPDANCE_PLUGIN_" + name] ?? fields.interface[field]);
   fields.review.demo_recording_url = publicHttps.parse(process.env.SUPDANCE_PLUGIN_DEMO_URL);
   fields.publication.countries = z.array(z.string().regex(/^[A-Z]{2}$/)).parse(JSON.parse(process.env.SUPDANCE_PLUGIN_COUNTRIES || "null"));
 }

@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { approval, type Approval } from "../shared/contracts";
 
 const root = createRoot(document.getElementById("root")!);
-const app = new App({ name: "Supdance", version: "0.1.1" });
+const app = new App({ name: "Supdance", version: "0.1.2" });
 const english = navigator.language.toLowerCase().startsWith("en");
 const t = english
   ? { review: "Review in Supdance", credit: "Estimated credits", heading: "Operation preview", loading: "Waiting for the Supdance result" }

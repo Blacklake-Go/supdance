@@ -14,6 +14,10 @@
 
 修改服务器配置前备份相应 HTTPS vhost。运行 `nginx -t` 成功后 reload。先验收主站首页和健康 API，再验收 `/mcp` challenge、protected resource metadata、工作台 OAuth 和拒绝未确认的写入。回滚时恢复 vhost 备份并重新校验和 reload，插件卷可保留供排查。
 
+### 插件目录页面
+
+将 `public/openai-plugin/` 下的三个 HTML 文件部署到 `/opt/supdance-openai-plugin/public/`，并在主域 HTTPS vhost 中接入 [目录页面路由](../deploy/nginx-listing-pages.conf)。[支持](https://www.supdance.com/openai-plugin/support)、[隐私政策](https://www.supdance.com/openai-plugin/privacy)和[服务条款](https://www.supdance.com/openai-plugin/terms)需允许匿名 HTTPS 访问；发布后逐一校验响应内容，再更新插件 ZIP。单独回滚这组页面时，只移除对应路由并校验后 reload。三个地址在 `plugin/plugin.json` 中维护，目录页面部署可独立于 MCP 服务。
+
 ## OAuth
 
 - 由独立授权服务器提供身份和同意页面。授权服务器可联邦使用 Supdance 登录。OpenAI 支持独立的预注册客户端，也支持 DCR。生产 MCP 资源是 `SUPDANCE_PLUGIN_ORIGIN/mcp`，授权和 token 兑换都需支持该 RFC 8707 resource。
