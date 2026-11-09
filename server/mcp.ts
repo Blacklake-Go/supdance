@@ -38,14 +38,14 @@ export const mcp = (deps: {
   function register<I extends z.ZodObject, O extends z.ZodObject>(
     name: string, description: string, inputSchema: I, outputSchema: O,
     scope: Scope, write: boolean, handler: (actor: Identity, args: z.output<I>, signal: AbortSignal) => Promise<z.input<O>> | z.input<O>,
-    ui = false,
+    ui = false, idempotent = write,
   ) {
     const key = "supdance_" + name;
     const securitySchemes = [{ type: "oauth2", scopes: [scope] }];
     server.registerTool<z.ZodObject, z.ZodObject>(key, {
       title: name.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" "),
       description, inputSchema, outputSchema,
-      annotations: { readOnlyHint: !write, destructiveHint: false, idempotentHint: write, openWorldHint: true },
+      annotations: { readOnlyHint: !write, destructiveHint: false, idempotentHint: idempotent, openWorldHint: true },
       _meta: { securitySchemes, ...(ui ? { ui: { resourceUri: resource } } : {}) },
     }, async (args, extra): Promise<CallToolResult> => {
       try {
@@ -72,11 +72,11 @@ export const mcp = (deps: {
 
   for (const name of Object.keys(storySchemas) as StorySkill[]) {
     const [key, description] = labels[name];
-    register(key, description, storyInput, z.object({ artifact: storySchemas[name] }), "story:generate", false,
+    register(key, description, storyInput, z.object({ artifact: storySchemas[name] }), "story:generate", true,
       async (actor, args, signal) => {
         const result = await bridge.generate(actor, { ...args, skill: name }, signal, () => {});
         return { artifact: storySchemas[name].parse(result.artifact) };
-      });
+      }, false, false);
   }
 
   register("list_projects", "List projects accessible to the linked Supdance account.", z.strictObject({}),
