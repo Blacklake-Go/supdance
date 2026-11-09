@@ -116,8 +116,8 @@ export class Bridge {
     const schema = input.skill === "chat" ? undefined : storySchemas[input.skill];
     const response = await this.fetch(actor, "/text/stream", {
       ...input, instructions: storyInstructions(input.skill, input.language), schema: schema ? z.toJSONSchema(schema) : undefined,
-      // This endpoint admits only entitlement-included text requests.
-      maxCredits: 0,
+      // Only the dedicated review identity may use the bounded paid model.
+      maxCredits: actor.subject === this.config.reviewSubject ? 1_000_000 : 0,
     }, signal);
     if (!response.headers.get("content-type")?.startsWith("text/plain")) {
       await response.body?.cancel();

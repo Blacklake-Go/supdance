@@ -32,16 +32,21 @@ export function configuration(env = process.env) {
   if (sessionKey && !/^[a-f0-9]{64}$/i.test(sessionKey)) throw new Error("Session key requires 32 bytes in hex");
   const bridge = url("BRIDGE_URL");
   const bridgeSecret = env.SUPDANCE_PLUGIN_BRIDGE_SECRET;
+  const reviewSubject = env.SUPDANCE_PLUGIN_REVIEW_SUBJECT;
+  if (reviewSubject && !/^[A-Za-z0-9_-]{1,128}$/.test(reviewSubject)) throw new Error("Invalid review subject");
   const oauth = issuer && authorization && token && introspection && introspectionId && introspectionSecret && webId && webSecret && sessionKey
     ? { issuer, authorization, token, introspection, introspectionId, introspectionSecret, webId, webSecret, sessionKey }
     : undefined;
   if (!local && (!oauth || !bridge || !bridgeSecret)) throw new Error("Production requires OAuth and the Supdance partner API");
   const media = env.SUPDANCE_PLUGIN_MEDIA_ENABLED === "1";
+  const projectsWrite = env.SUPDANCE_PLUGIN_PROJECTS_WRITE_ENABLED === "1";
   return {
     local, port, origin, webOrigin, webBase, resource: origin + "/mcp", oauth,
     bridge: bridge && bridgeSecret ? { url: bridge, secret: bridgeSecret } : undefined,
+    reviewSubject,
     database: env.SUPDANCE_PLUGIN_DATABASE || "./data/plugin.sqlite",
     media,
+    projectsWrite,
     mcpOrigins: new Set([origin, "https://chatgpt.com", "https://platform.openai.com"]),
   };
 }

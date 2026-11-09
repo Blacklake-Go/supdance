@@ -106,6 +106,7 @@ export async function fixture(media = false, built = false, webBase = "") {
     SUPDANCE_PLUGIN_WEB_CLIENT_ID: "web-client", SUPDANCE_PLUGIN_WEB_CLIENT_SECRET: "fixture-client-secret",
     SUPDANCE_PLUGIN_SESSION_KEY: "f0".repeat(32), SUPDANCE_PLUGIN_BRIDGE_URL: issuer, SUPDANCE_PLUGIN_BRIDGE_SECRET: "fixture-bridge",
     SUPDANCE_PLUGIN_MEDIA_ENABLED: media ? "1" : "0",
+    SUPDANCE_PLUGIN_PROJECTS_WRITE_ENABLED: "1",
   });
   const app = application(config, {
     index: await Bun.file(built ? "dist/index.html" : "web/index.html").text(),

@@ -83,12 +83,14 @@ export const mcp = (deps: {
     z.object({ projects: z.array(project).max(100) }), "projects:read", false, async (actor) => ({ projects: await bridge.projects(actor) }));
   register("get_project", "Read one accessible project and its summary.", z.strictObject({ projectId: ID }),
     z.object({ project }), "projects:read", false, async (actor, args) => ({ project: await bridge.project(actor, args.projectId) }));
-  register("create_project", "Prepare a new project for user confirmation. The project is created only after approval and commit.",
-    z.strictObject({ requestId: ID, title: text(240), summary: text(2000) }), approveResult, "projects:write", true,
-    async (actor, { requestId, ...payload }) => ({ approval: await actions.preview(actor, requestId, { kind: "project", ...payload }) }), true);
-  register("commit_project", "Commit a new project using its user-approved review ID.",
-    z.strictObject({ reviewId: ID }), approveResult, "projects:write", true,
-    async (actor, { reviewId }) => ({ approval: await actions.execute(actor, reviewId, "project") }), true);
+  if (config.projectsWrite) {
+    register("create_project", "Prepare a new project for user confirmation. The project is created only after approval and commit.",
+      z.strictObject({ requestId: ID, title: text(240), summary: text(2000) }), approveResult, "projects:write", true,
+      async (actor, { requestId, ...payload }) => ({ approval: await actions.preview(actor, requestId, { kind: "project", ...payload }) }), true);
+    register("commit_project", "Commit a new project using its user-approved review ID.",
+      z.strictObject({ reviewId: ID }), approveResult, "projects:write", true,
+      async (actor, { reviewId }) => ({ approval: await actions.execute(actor, reviewId, "project") }), true);
+  }
   register("list_canvases", "List canvases accessible in the selected project so the user can identify a target.",
     z.strictObject({ projectId: ID }), z.object({ canvases: z.array(canvasSummary).max(100) }), "canvas:read", false,
     async (actor, { projectId }) => ({ canvases: await bridge.canvases(actor, projectId) }));

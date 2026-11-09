@@ -11,7 +11,7 @@
 | `supdance_rewrite_dialogue` | `story:generate` | 根据源文本与用户约束重写对白 |
 | `supdance_generate_storyboard` | `story:generate` | 返回唯一镜头编号和完整制作字段 |
 | `supdance_list_projects` / `supdance_get_project` | `projects:read` | 读取当前用户授权的项目列表或单个摘要 |
-| `supdance_create_project` / `supdance_commit_project` | `projects:write` | 新项目预览与已确认后的提交 |
+| `supdance_create_project` / `supdance_commit_project` | `projects:write` | 新项目预览与已确认后的提交；仅在宿主完成项目创建合同后启用 |
 | `supdance_list_canvases` | `canvas:read` | 列出当前项目内有权访问的画布 |
 | `supdance_get_canvas_context` | `canvas:read` | 读取目标画布的版本和最小节点上下文 |
 | `supdance_preview_canvas_changes` / `supdance_apply_canvas_changes` | `canvas:write` | 镜头追加预览与已确认后的提交 |
